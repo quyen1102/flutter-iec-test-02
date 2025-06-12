@@ -254,14 +254,7 @@ class _ReadingScreenState extends State<ReadingScreen> {
                   _handleChapterUnlock(context, index, unlockButtonKey);
                 },
               )
-              : SlidingView(
-                key: const ValueKey('sliding'),
-                book: state.book!,
-                currentChapterIndex: state.currentChapterIndex,
-                onChapterChanged: (index) {
-                  context.read<BookReaderCubit>().selectChapter(index);
-                },
-              ),
+              : SlidingView(cubit: context.read<BookReaderCubit>()),
     );
   }
 

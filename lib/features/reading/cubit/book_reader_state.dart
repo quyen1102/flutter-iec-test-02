@@ -16,6 +16,12 @@ class BookReaderState {
   final int currentChapterIndex;
   final bool isDebugMode;
 
+  // Page-related states for sliding mode
+  final int currentPageIndex;
+  final List<String> pages;
+  final double fontSize;
+  final double lineHeight;
+
   const BookReaderState({
     this.book,
     this.coinBalance = 50, // Start with 50 coins as requested
@@ -24,6 +30,10 @@ class BookReaderState {
     this.errorMessage,
     this.currentChapterIndex = 0,
     this.isDebugMode = false,
+    this.currentPageIndex = 0,
+    this.pages = const [],
+    this.fontSize = 18.0,
+    this.lineHeight = 1.8,
   });
 
   /// Creates a copy of this state with updated properties
@@ -35,6 +45,10 @@ class BookReaderState {
     String? errorMessage,
     int? currentChapterIndex,
     bool? isDebugMode,
+    int? currentPageIndex,
+    List<String>? pages,
+    double? fontSize,
+    double? lineHeight,
   }) {
     return BookReaderState(
       book: book ?? this.book,
@@ -44,6 +58,10 @@ class BookReaderState {
       errorMessage: errorMessage ?? this.errorMessage,
       currentChapterIndex: currentChapterIndex ?? this.currentChapterIndex,
       isDebugMode: isDebugMode ?? this.isDebugMode,
+      currentPageIndex: currentPageIndex ?? this.currentPageIndex,
+      pages: pages ?? this.pages,
+      fontSize: fontSize ?? this.fontSize,
+      lineHeight: lineHeight ?? this.lineHeight,
     );
   }
 
@@ -63,6 +81,15 @@ class BookReaderState {
     return book!.chapters[currentChapterIndex];
   }
 
+  /// Returns true if there are pages available
+  bool get hasPages => pages.isNotEmpty;
+
+  /// Returns true if can go to next page
+  bool get canGoToNextPage => currentPageIndex < pages.length - 1;
+
+  /// Returns true if can go to previous page
+  bool get canGoToPreviousPage => currentPageIndex > 0;
+
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
@@ -73,7 +100,11 @@ class BookReaderState {
         other.status == status &&
         other.errorMessage == errorMessage &&
         other.currentChapterIndex == currentChapterIndex &&
-        other.isDebugMode == isDebugMode;
+        other.isDebugMode == isDebugMode &&
+        other.currentPageIndex == currentPageIndex &&
+        other.pages == pages &&
+        other.fontSize == fontSize &&
+        other.lineHeight == lineHeight;
   }
 
   @override
@@ -84,11 +115,15 @@ class BookReaderState {
         status.hashCode ^
         errorMessage.hashCode ^
         currentChapterIndex.hashCode ^
-        isDebugMode.hashCode;
+        isDebugMode.hashCode ^
+        currentPageIndex.hashCode ^
+        pages.hashCode ^
+        fontSize.hashCode ^
+        lineHeight.hashCode;
   }
 
   @override
   String toString() {
-    return 'BookReaderState(book: ${book?.title}, coinBalance: $coinBalance, readingMode: $readingMode, status: $status, currentChapterIndex: $currentChapterIndex, isDebugMode: $isDebugMode)';
+    return 'BookReaderState(book: ${book?.title}, coinBalance: $coinBalance, readingMode: $readingMode, status: $status, currentChapterIndex: $currentChapterIndex, currentPageIndex: $currentPageIndex, pagesCount: ${pages.length}, isDebugMode: $isDebugMode)';
   }
 }

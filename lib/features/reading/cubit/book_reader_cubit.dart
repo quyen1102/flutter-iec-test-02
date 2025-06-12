@@ -39,6 +39,9 @@ class BookReaderCubit extends Cubit<BookReaderState> {
           status: BookReaderStatus.success,
         ),
       );
+
+      // Calculate pages for current chapter
+      _updatePagesForCurrentChapter();
     } catch (error) {
       emit(
         state.copyWith(
@@ -111,10 +114,103 @@ class BookReaderCubit extends Cubit<BookReaderState> {
 
     // Only allow selecting unlocked chapters
     if (!chapter.isLocked) {
-      emit(state.copyWith(currentChapterIndex: chapterIndex));
+      emit(
+        state.copyWith(
+          currentChapterIndex: chapterIndex,
+          currentPageIndex: 0, // Reset to first page of new chapter
+        ),
+      );
+
+      // Recalculate pages for new chapter
+      _updatePagesForCurrentChapter();
 
       // Save current chapter selection
       AppPreferences.saveCurrentChapter(chapterIndex);
+    }
+  }
+
+  /// Goes to the next page in sliding mode
+  void goToNextPage() {
+    if (state.canGoToNextPage) {
+      emit(state.copyWith(currentPageIndex: state.currentPageIndex + 1));
+    }
+  }
+
+  /// Goes to the previous page in sliding mode
+  void goToPreviousPage() {
+    if (state.canGoToPreviousPage) {
+      emit(state.copyWith(currentPageIndex: state.currentPageIndex - 1));
+    }
+  }
+
+  /// Goes to a specific page
+  void goToPage(int pageIndex) {
+    print(
+      "goToPage called with index: $pageIndex, current: ${state.currentPageIndex}",
+    );
+    if (pageIndex >= 0 && pageIndex < state.pages.length) {
+      emit(state.copyWith(currentPageIndex: pageIndex));
+      print("Page updated to: ${state.currentPageIndex}");
+    }
+  }
+
+  /// Updates font size
+  void updateFontSize(double fontSize) {
+    if (fontSize > 0) {
+      emit(state.copyWith(fontSize: fontSize));
+      // Recalculate pages with new font size
+      _updatePagesForCurrentChapter();
+    }
+  }
+
+  /// Updates line height
+  void updateLineHeight(double lineHeight) {
+    if (lineHeight > 0) {
+      emit(state.copyWith(lineHeight: lineHeight));
+      // Recalculate pages with new line height
+      _updatePagesForCurrentChapter();
+    }
+  }
+
+  /// Paginates chapter content for sliding mode
+  List<String> _paginateChapter(String content, {int wordsPerPage = 150}) {
+    final words = content.trim().split(RegExp(r'\s+'));
+
+    if (words.isEmpty || words.first.isEmpty) {
+      return [];
+    }
+
+    final pages = <String>[];
+    var currentPageWords = <String>[];
+
+    for (final word in words) {
+      currentPageWords.add(word);
+      if (currentPageWords.length >= wordsPerPage) {
+        pages.add(currentPageWords.join(' '));
+        currentPageWords = [];
+      }
+    }
+
+    if (currentPageWords.isNotEmpty) {
+      pages.add(currentPageWords.join(' '));
+    }
+
+    return pages;
+  }
+
+  /// Updates pages for current chapter
+  void _updatePagesForCurrentChapter() {
+    final currentChapter = state.currentChapter;
+    if (currentChapter != null) {
+      final pages = _paginateChapter(currentChapter.content);
+      emit(
+        state.copyWith(
+          pages: pages,
+          currentPageIndex: 0, // Reset to first page when recalculating
+        ),
+      );
+    } else {
+      emit(state.copyWith(pages: [], currentPageIndex: 0));
     }
   }
 
@@ -123,13 +219,6 @@ class BookReaderCubit extends Cubit<BookReaderState> {
     if (amount > 0) {
       emit(state.copyWith(coinBalance: state.coinBalance + amount));
     }
-  }
-
-  /// Gets the paginated content for sliding mode
-  List<String> getPaginatedContent(String content) {
-    // Simple pagination logic - split by paragraphs
-    // In a real app, you would use TextPainter for more accurate pagination
-    return content.split('\n\n').where((p) => p.trim().isNotEmpty).toList();
   }
 
   /// Saves current game progress to local storage

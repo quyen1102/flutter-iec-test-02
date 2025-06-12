@@ -1,116 +1,88 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:page_flip/page_flip.dart';
 import '../../../../core/models/book_model.dart';
 import '../../../../core/models/chapter_model.dart';
+import '../../cubit/book_reader_cubit.dart';
+import '../../cubit/book_reader_state.dart';
 
 class SlidingView extends StatefulWidget {
-  final Book book;
-  final int currentChapterIndex;
-  final Function(int) onChapterChanged;
-
-  const SlidingView({
-    super.key,
-    required this.book,
-    required this.currentChapterIndex,
-    required this.onChapterChanged,
-  });
+  const SlidingView({super.key, required this.cubit});
+  final BookReaderCubit cubit;
 
   @override
   _SlidingViewState createState() => _SlidingViewState();
 }
 
 class _SlidingViewState extends State<SlidingView> {
-  final GlobalKey<PageFlipWidgetState> _pageFlipController =
+  GlobalKey<PageFlipWidgetState> _pageFlipController =
       GlobalKey<PageFlipWidgetState>();
-  List<String> _pages = [];
-  int _currentPageIndex = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _updateContent();
-  }
-
-  @override
-  void didUpdateWidget(SlidingView oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.currentChapterIndex != widget.currentChapterIndex ||
-        oldWidget.book != widget.book) {
-      _updateContent();
-    }
-  }
-
-  void _updateContent() {
-    final unlockedChapters = widget.book.unlockedChapters;
-
-    if (unlockedChapters.isNotEmpty) {
-      int unlockedIndex = 0;
-      for (int i = 0; i < unlockedChapters.length; i++) {
-        if (widget.book.chapters.indexOf(unlockedChapters[i]) ==
-            widget.currentChapterIndex) {
-          unlockedIndex = i;
-          break;
-        }
-      }
-
-      final currentChapter = unlockedChapters[unlockedIndex];
-      _pages = _paginateChapter(currentChapter.content);
-      _currentPageIndex = 0;
-    } else {
-      _pages = [];
-    }
-  }
-
-  /// [content]: The full text of the chapter.
-  /// [wordsPerPage]: The target number of words for each page.
-  /// Returns a list of strings, where each string is a page.
-  List<String> _paginateChapter(String content, {int wordsPerPage = 150}) {
-    final words = content.trim().split(RegExp(r'\s+'));
-
-    if (words.isEmpty || words.first.isEmpty) {
-      return [];
-    }
-
-    final pages = <String>[];
-    var currentPageWords = <String>[];
-
-    for (final word in words) {
-      currentPageWords.add(word);
-      if (currentPageWords.length >= wordsPerPage) {
-        pages.add(currentPageWords.join(' '));
-        currentPageWords = [];
-      }
-    }
-
-    if (currentPageWords.isNotEmpty) {
-      pages.add(currentPageWords.join(' '));
-    }
-
-    return pages;
-  }
+  int? _lastChapterIndex;
 
   @override
   Widget build(BuildContext context) {
-    final unlockedChapters = widget.book.unlockedChapters;
+    return BlocBuilder<BookReaderCubit, BookReaderState>(
+      buildWhen:
+          (previous, current) =>
+              previous.currentChapterIndex != current.currentChapterIndex ||
+              previous.pages != current.pages ||
+              previous.currentPageIndex != current.currentPageIndex ||
+              previous.fontSize != current.fontSize ||
+              previous.lineHeight != current.lineHeight,
+      builder: (context, state) {
+        final currentChapter = state.currentChapter;
 
-    if (unlockedChapters.isEmpty) {
-      return _buildNoUnlockedChaptersMessage();
-    }
+        // Create new controller when chapter changes
+        if (_lastChapterIndex != state.currentChapterIndex) {
+          _pageFlipController = GlobalKey<PageFlipWidgetState>();
+          _lastChapterIndex = state.currentChapterIndex;
+          print("Chapter changed - pages: ${state.pages.length}");
+        }
 
-    if (_pages.isEmpty) {
-      return _buildLoadingMessage();
-    }
+        if (currentChapter?.content.isEmpty ?? true) {
+          return _buildNoChapterSelectedMessage();
+        }
 
-    return Column(
-      children: [
-        _buildChapterHeader(unlockedChapters),
-        Expanded(child: _buildPageView()),
-        _buildPageIndicator(),
-      ],
+        if (currentChapter?.isLocked ?? true) {
+          return _buildLockedChapterMessage();
+        }
+
+        if (state.isLoading) {
+          return _buildLoadingMessage();
+        }
+
+        return Column(
+          children: [
+            _buildChapterHeader(
+              currentChapter?.title ?? 'Unknown Chapter',
+              state.currentChapterIndex + 1,
+              state.book?.chapters.length ?? 0,
+            ),
+            Expanded(child: _buildPageView(state)),
+            _buildPageIndicator(state),
+          ],
+        );
+      },
     );
   }
 
-  Widget _buildNoUnlockedChaptersMessage() {
+  Widget _buildNoChapterSelectedMessage() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.book_outlined, size: 64, color: Colors.grey.shade400),
+          const SizedBox(height: 16),
+          Text(
+            'No chapter selected',
+            style: TextStyle(fontSize: 18, color: Colors.grey.shade400),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLockedChapterMessage() {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -118,7 +90,7 @@ class _SlidingViewState extends State<SlidingView> {
           Icon(Icons.lock, size: 64, color: Colors.grey.shade400),
           const SizedBox(height: 16),
           Text(
-            'No unlocked chapters available',
+            'Chapter is locked',
             style: TextStyle(fontSize: 18, color: Colors.grey.shade400),
           ),
           const SizedBox(height: 8),
@@ -135,25 +107,17 @@ class _SlidingViewState extends State<SlidingView> {
     return const Center(child: CircularProgressIndicator());
   }
 
-  Widget _buildChapterHeader(List<Chapter> unlockedChapters) {
-    Chapter? currentChapter;
-    int chapterNumber = 1;
-
-    for (int i = 0; i < unlockedChapters.length; i++) {
-      if (widget.book.chapters.indexOf(unlockedChapters[i]) ==
-          widget.currentChapterIndex) {
-        currentChapter = unlockedChapters[i];
-        chapterNumber = i + 1;
-        break;
-      }
-    }
-
+  Widget _buildChapterHeader(
+    String title,
+    int chapterIndex,
+    int totalChapters,
+  ) {
     return Container(
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
           Text(
-            currentChapter?.title ?? 'Unknown Chapter',
+            title,
             style: const TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
@@ -162,25 +126,41 @@ class _SlidingViewState extends State<SlidingView> {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 8),
-          Text(
-            '${chapterNumber} of ${unlockedChapters.length} unlocked chapters',
-            style: TextStyle(fontSize: 14, color: Colors.grey.shade400),
-          ),
         ],
       ),
     );
   }
 
-  Widget _buildPageView() {
+  Widget _buildPageView(BookReaderState state) {
+    if (state.pages.isEmpty) {
+      return const Center(
+        child: Text(
+          'No content available',
+          style: TextStyle(color: Colors.grey),
+        ),
+      );
+    }
+
     return PageFlipWidget(
       key: _pageFlipController,
       backgroundColor: Colors.grey.shade900,
-      lastPage: _buildPageContent(_pages.length - 1, isLastPage: true),
-      children: [for (int i = 0; i < _pages.length; i++) _buildPageContent(i)],
+      children: List.generate(
+        state.pages.length,
+        (index) => _buildPageContent(index, state),
+      ),
+      onPageFlipped: (index) {
+        // Use cubit method instead of setState
+        print("Page flipped to: $index");
+        widget.cubit.goToPage(index);
+      },
     );
   }
 
-  Widget _buildPageContent(int index, {bool isLastPage = false}) {
+  Widget _buildPageContent(
+    int index,
+    BookReaderState state, {
+    bool isLastPage = false,
+  }) {
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -188,10 +168,7 @@ class _SlidingViewState extends State<SlidingView> {
           end: Alignment.bottomRight,
           colors: [Colors.grey.shade900, Colors.grey.shade800],
         ),
-        border: Border.all(
-          color: Colors.indigo.withValues(alpha: 0.3),
-          width: 2,
-        ),
+        border: Border.all(color: Colors.indigo.withOpacity(0.3), width: 2),
         borderRadius: BorderRadius.circular(8),
       ),
       padding: const EdgeInsets.all(24.0),
@@ -212,7 +189,7 @@ class _SlidingViewState extends State<SlidingView> {
                   ),
                 ),
                 Text(
-                  '${index + 1} / ${_pages.length}',
+                  '${index + 1} / ${state.pages.length}',
                   style: TextStyle(fontSize: 14, color: Colors.grey.shade400),
                 ),
               ],
@@ -221,19 +198,20 @@ class _SlidingViewState extends State<SlidingView> {
           // Divider
           Container(
             height: 1,
-            color: Colors.indigo.withValues(alpha: 0.3),
+            color: Colors.indigo.withOpacity(0.3),
             margin: const EdgeInsets.only(bottom: 24),
           ),
           // Page content
           Expanded(
             child: SingleChildScrollView(
+              physics: const NeverScrollableScrollPhysics(),
               child: Text(
-                index < _pages.length ? _pages[index] : '',
+                index < state.pages.length ? state.pages[index] : '',
                 textAlign: TextAlign.justify,
                 style: TextStyle(
-                  fontSize: 18,
-                  height: 1.8,
-                  color: Colors.white.withValues(alpha: 0.9),
+                  fontSize: state.fontSize,
+                  height: state.lineHeight,
+                  color: Colors.white.withOpacity(0.9),
                   letterSpacing: 0.5,
                 ),
               ),
@@ -268,8 +246,8 @@ class _SlidingViewState extends State<SlidingView> {
     );
   }
 
-  Widget _buildPageIndicator() {
-    if (_pages.length <= 1) return const SizedBox.shrink();
+  Widget _buildPageIndicator(BookReaderState state) {
+    if (state.pages.length <= 1) return const SizedBox.shrink();
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -278,46 +256,40 @@ class _SlidingViewState extends State<SlidingView> {
         children: [
           IconButton(
             onPressed:
-                _currentPageIndex > 0
+                state.canGoToPreviousPage
                     ? () {
-                      final prevPage = (_currentPageIndex - 1).clamp(
+                      final prevPage = (state.currentPageIndex - 1).clamp(
                         0,
-                        _pages.length - 1,
+                        state.pages.length - 1,
                       );
                       _pageFlipController.currentState?.goToPage(prevPage);
-                      setState(() {
-                        _currentPageIndex = prevPage;
-                      });
+                      widget.cubit.goToPreviousPage();
                     }
                     : null,
             icon: const Icon(Icons.chevron_left),
             iconSize: 32,
-            color: _currentPageIndex > 0 ? Colors.white : Colors.grey.shade600,
+            color:
+                state.canGoToPreviousPage ? Colors.white : Colors.grey.shade600,
           ),
           Text(
-            'Tap or swipe to flip pages',
+            'Page ${state.currentPageIndex + 1} of ${state.pages.length}',
             style: TextStyle(fontSize: 14, color: Colors.grey.shade400),
           ),
           IconButton(
             onPressed:
-                _currentPageIndex < _pages.length - 1
+                state.canGoToNextPage
                     ? () {
-                      final nextPage = (_currentPageIndex + 1).clamp(
+                      final nextPage = (state.currentPageIndex + 1).clamp(
                         0,
-                        _pages.length - 1,
+                        state.pages.length - 1,
                       );
                       _pageFlipController.currentState?.goToPage(nextPage);
-                      setState(() {
-                        _currentPageIndex = nextPage;
-                      });
+                      widget.cubit.goToNextPage();
                     }
                     : null,
             icon: const Icon(Icons.chevron_right),
             iconSize: 32,
-            color:
-                _currentPageIndex < _pages.length - 1
-                    ? Colors.white
-                    : Colors.grey.shade600,
+            color: state.canGoToNextPage ? Colors.white : Colors.grey.shade600,
           ),
         ],
       ),
