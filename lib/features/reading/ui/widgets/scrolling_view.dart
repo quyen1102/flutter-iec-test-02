@@ -102,10 +102,7 @@ class ScrollingView extends StatelessWidget {
           const SizedBox(height: 20),
           ElevatedButton.icon(
             key: unlockButtonKey,
-            onPressed:
-                hasEnoughCoins
-                    ? () => onChapterUnlock(index, unlockButtonKey)
-                    : null,
+            onPressed: () => onChapterUnlock(index, unlockButtonKey),
             icon: Icon(hasEnoughCoins ? Icons.lock_open : Icons.lock, size: 20),
             label: Text(
               hasEnoughCoins ? 'Unlock Chapter' : 'Not enough coins',

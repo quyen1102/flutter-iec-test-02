@@ -51,10 +51,7 @@ class ChapterListWidget extends StatelessWidget {
         message: "Unlock for ${chapter.unlockCost} coins",
         child: ElevatedButton.icon(
           key: unlockButtonKey,
-          onPressed:
-              hasEnoughCoins
-                  ? () => onChapterUnlock(index, unlockButtonKey)
-                  : null,
+          onPressed: () => onChapterUnlock(index, unlockButtonKey),
           icon: const Icon(Icons.lock, size: 16),
           label: Text(_getChapterShortTitle(chapter.title)),
           style: ElevatedButton.styleFrom(
